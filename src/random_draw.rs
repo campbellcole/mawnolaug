@@ -66,12 +66,13 @@ pub async fn random_draw_task(data: Arc<Data>, http: Arc<Http>) {
     }
 }
 
-async fn do_random_draw(
+pub async fn do_random_draw(
     random_draw: &RandomDrawConfig,
     data: &Arc<Data>,
-    http: &Arc<Http>,
+    http: impl AsRef<Http>,
 ) -> Result<()> {
     debug!("running random draw");
+    let http = http.as_ref();
 
     let last_run = data.state.lock().await.last_trigger();
     let index = data.index.lock().await;

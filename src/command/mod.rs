@@ -23,6 +23,7 @@ commands! {
     random,
     remove,
     remove_for,
+    trigger,
 }
 
 macro_rules! command {
