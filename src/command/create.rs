@@ -23,6 +23,18 @@ struct CreateChannel {
 }
 
 pub async fn create_channel_for(ctx: &Context<'_>, user: &User) -> Result<()> {
+    let mut state = ctx.data().state.lock().await;
+
+    if state.get_channel(user.id).is_some() {
+        ctx.send(
+            CreateReply::default()
+                .content(format!("Channel already exists for <@{}>", user.id))
+                .ephemeral(true),
+        )
+        .await?;
+        return Ok(());
+    }
+
     let user_name = user.global_name.as_ref().unwrap_or(&user.name);
 
     let channel_name = user_name.replace(' ', "_");
@@ -40,21 +52,20 @@ pub async fn create_channel_for(ctx: &Context<'_>, user: &User) -> Result<()> {
             guild_id,
             &channel,
             Some(&format!(
-                "mawnolaug channel created by {}",
-                ctx.author().name,
+                "mawnolaug channel created by <@{}>",
+                ctx.author().id,
             )),
         )
         .await?;
 
-    ctx.data()
-        .state
-        .lock()
-        .await
-        .set_channel(user.id, channel.id)
-        .await?;
+    state.set_channel(user.id, channel.id).await?;
 
-    ctx.send(CreateReply::default().content(format!("Created channel: <#{}>", channel.id)))
-        .await?;
+    ctx.send(
+        CreateReply::default()
+            .content(format!("Created channel: <#{}>", channel.id))
+            .ephemeral(true),
+    )
+    .await?;
 
     Ok(())
 }

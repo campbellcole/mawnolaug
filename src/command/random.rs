@@ -20,7 +20,9 @@ pub async fn random(ctx: Context<'_>, user: Option<User>) -> Result<()> {
     let message = if let Some(user) = user {
         let Some(user_channel) = ctx.data().state.lock().await.get_channel(user.id) else {
             ctx.send(
-                CreateReply::default().content(format!("No channel exists for {}", user.name)),
+                CreateReply::default()
+                    .content(format!("No channel exists for <@{}>", user.id))
+                    .ephemeral(true),
             )
             .await?;
 
@@ -36,7 +38,8 @@ pub async fn random(ctx: Context<'_>, user: Option<User>) -> Result<()> {
         else {
             ctx.send(
                 CreateReply::default()
-                    .content(format!("Channel for {} contains no messages", user.name)),
+                    .content(format!("Channel for <@{}> contains no messages", user.id))
+                    .ephemeral(true),
             )
             .await?;
 
@@ -46,8 +49,12 @@ pub async fn random(ctx: Context<'_>, user: Option<User>) -> Result<()> {
         ctx.http().get_message(user_channel, random).await?
     } else {
         let Some((channel_id, message_id)) = ctx.data().index.lock().await.random_message() else {
-            ctx.send(CreateReply::default().content("No messages in any channel"))
-                .await?;
+            ctx.send(
+                CreateReply::default()
+                    .content("No messages in any channel")
+                    .ephemeral(true),
+            )
+            .await?;
             return Ok(());
         };
 

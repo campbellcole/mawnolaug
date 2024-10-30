@@ -23,9 +23,11 @@ pub async fn remove_channel_for(ctx: &Context<'_>, user: &User) -> Result<()> {
     else {
         ctx.send(
             CreateReply::default()
-                .content(format!("No monologue channel exists for {}", user.name)),
+                .content(format!("No monologue channel exists for <@{}>", user.id))
+                .ephemeral(true),
         )
         .await?;
+
         return Ok(());
     };
 
@@ -47,7 +49,9 @@ pub async fn remove_channel_for(ctx: &Context<'_>, user: &User) -> Result<()> {
         .await?;
 
     ctx.send(
-        CreateReply::default().content(format!("Removed monologue channel for {}", user.name)),
+        CreateReply::default()
+            .content(format!("Removed monologue channel for <@{}>", user.id))
+            .ephemeral(true),
     )
     .await?;
 
