@@ -5,6 +5,7 @@ use crate::Context;
 
 super::command! {
     false;
+    /// Remove your monologue channel if one exists
     pub async fn remove(ctx: Context<'_>) -> Result<()> {
         let user = ctx.author();
 

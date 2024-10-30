@@ -15,6 +15,7 @@ pub fn command(_config: &AppConfig) -> Command<Arc<Data>, Report> {
     random()
 }
 
+/// Get a random message from a random channel or a specific user's channel
 #[command(slash_command)]
 pub async fn random(ctx: Context<'_>, user: Option<User>) -> Result<()> {
     let message = if let Some(user) = user {

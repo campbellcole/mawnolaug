@@ -9,6 +9,7 @@ use crate::Context;
 
 super::command! {
     false;
+    /// Create a monologue channel for yourself
     pub async fn create(ctx: Context<'_>) -> Result<()> {
         let user = ctx.author();
 
