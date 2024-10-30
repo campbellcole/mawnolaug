@@ -1,7 +1,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use chrono::{DateTime, Utc};
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{Result, WrapErr};
 use poise::serenity_prelude::{ChannelId, Context, GetMessages, Message, MessageId, MessageType};
 use rand::{seq::SliceRandom, Rng};
 use serde::{Deserialize, Serialize};
@@ -21,6 +21,7 @@ impl Index {
         let index_file = config.state_dir.join("index.json");
 
         if !index_file.exists() {
+            trace!("creating a new index file at {:?}", index_file);
             return Ok(Self {
                 index_file,
                 last_indexed: HashMap::new(),
@@ -28,9 +29,12 @@ impl Index {
             });
         }
 
-        let index = tokio::fs::read_to_string(&index_file).await?;
+        let index = tokio::fs::read_to_string(&index_file)
+            .await
+            .wrap_err("failed to read index file")?;
 
-        let mut index = serde_json::from_str::<Self>(&index)?;
+        let mut index =
+            serde_json::from_str::<Self>(&index).wrap_err("failed to parse index file")?;
 
         index.index_file = index_file;
 
@@ -38,9 +42,11 @@ impl Index {
     }
 
     pub async fn save(&self) -> Result<()> {
-        let index_json = serde_json::to_string(self)?;
+        let index_json = serde_json::to_string(self).wrap_err("failed to serialize index")?;
 
-        tokio::fs::write(&self.index_file, index_json).await?;
+        tokio::fs::write(&self.index_file, index_json)
+            .await
+            .wrap_err("failed to write serialized index")?;
 
         Ok(())
     }
@@ -75,26 +81,22 @@ impl Index {
     }
 
     // Precondition: All messages must be from the same channel.
-    fn save_messages(&mut self, channel_id: ChannelId, messages: impl Iterator<Item = Message>) {
+    fn extend_messages(&mut self, channel_id: ChannelId, messages: impl Iterator<Item = Message>) {
         self.messages
             .entry(channel_id)
             .or_default()
             .extend(messages.filter(Self::is_message_valid).map(|msg| msg.id));
     }
 
-    fn save_message_inner(&mut self, message: Message) {
+    pub async fn save_message(&mut self, message: Message) -> Result<()> {
         if !Self::is_message_valid(&message) {
-            return;
+            return Ok(());
         }
 
         self.messages
             .entry(message.channel_id)
             .or_default()
             .push(message.id);
-    }
-
-    pub async fn save_message(&mut self, message: Message) -> Result<()> {
-        self.save_message_inner(message);
 
         self.save().await?;
 
@@ -116,8 +118,7 @@ impl Index {
             return None;
         }
 
-        let mut rng = rand::thread_rng();
-        let mut random_index = rng.gen_range(0..total_count);
+        let mut random_index = rand::thread_rng().gen_range(0..total_count);
 
         for (key, vec) in &self.messages {
             if random_index < vec.len() {
@@ -132,22 +133,27 @@ impl Index {
     }
 
     pub fn random_message_from(&self, channel_id: ChannelId) -> Option<MessageId> {
-        let mut rng = rand::thread_rng();
         let messages = self.messages.get(&channel_id)?;
 
-        messages.choose(&mut rng).copied()
+        messages.choose(&mut rand::thread_rng()).copied()
     }
 
-    pub fn random_message_since(&self, timestamp: DateTime<Utc>) -> Option<MessageId> {
-        let mut rng = rand::thread_rng();
+    pub fn random_message_since(&self, timestamp: DateTime<Utc>) -> Option<(ChannelId, MessageId)> {
         let all_messages: Vec<_> = self
             .messages
-            .values()
-            .flatten()
-            .filter(|msg| *msg.created_at() > timestamp)
+            .iter()
+            .flat_map(|(channel_id, message_ids)| {
+                message_ids.iter().filter_map(|&message_id| {
+                    if *message_id.created_at() >= timestamp {
+                        Some((*channel_id, message_id))
+                    } else {
+                        None
+                    }
+                })
+            })
             .collect();
 
-        all_messages.choose(&mut rng).map(|v| **v)
+        all_messages.choose(&mut rand::thread_rng()).copied()
     }
 
     pub async fn remove_message(
@@ -171,7 +177,7 @@ impl Index {
 
     pub async fn index(&mut self, ctx: &Context, channels: Vec<ChannelId>) -> Result<()> {
         for channel_id in channels {
-            trace!("indexing channel {:?}", channel_id);
+            debug!("indexing channel {:?}", channel_id);
             let mut current_message = self.last_indexed(&channel_id);
             let mut latest_message = None;
             // if we already have a current message, we should go forward in time
@@ -211,7 +217,7 @@ impl Index {
                 };
                 trace!(?next_message_id);
 
-                self.save_messages(channel_id, messages.into_iter());
+                self.extend_messages(channel_id, messages.into_iter());
 
                 current_message = next_message_id;
             }

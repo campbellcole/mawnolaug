@@ -1,13 +1,15 @@
 use color_eyre::eyre::Result;
-use poise::{command, serenity_prelude::User, CreateReply};
+use poise::{serenity_prelude::User, CreateReply};
 
 use crate::Context;
 
-#[command(slash_command)]
-pub async fn remove(ctx: Context<'_>) -> Result<()> {
-    let user = ctx.author();
+super::command! {
+    false;
+    pub async fn remove(ctx: Context<'_>) -> Result<()> {
+        let user = ctx.author();
 
-    remove_channel_for(&ctx, user).await
+        remove_channel_for(&ctx, user).await
+    }
 }
 
 pub async fn remove_channel_for(ctx: &Context<'_>, user: &User) -> Result<()> {

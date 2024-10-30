@@ -1,20 +1,29 @@
-use std::path::PathBuf;
+use std::{ops::Deref, path::PathBuf};
 
 use color_eyre::eyre::Result;
 use figment::{
     providers::{Env, Format, Toml},
     Figment,
 };
-use poise::serenity_prelude::ChannelId;
+use poise::serenity_prelude::{ChannelId, Permissions};
 use serde::Deserialize;
+use serde_with::{serde_as, DisplayFromStr};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(transparent)]
-pub struct AdminPermissions(pub String);
+pub struct AdminPermissions(pub Permissions);
 
 impl Default for AdminPermissions {
     fn default() -> Self {
-        AdminPermissions("0".to_owned())
+        AdminPermissions(Permissions::ADMINISTRATOR)
+    }
+}
+
+impl Deref for AdminPermissions {
+    type Target = Permissions;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -40,8 +49,26 @@ pub struct AppConfig {
 pub struct RandomDrawConfig {
     /// The channel ID where the bot will send messages
     pub channel_id: ChannelId,
-    /// The interval in minutes for the random draw
-    pub interval: u64,
+    /// A cron schedule for when to trigger the random draws
+    pub schedule: Schedule,
+    /// The timezone to use for the cron schedule
+    #[serde(default)]
+    pub timezone: Option<chrono_tz::Tz>,
+    /// A list of messages to prefix each random draw with
+    #[serde(default)]
+    pub messages: Option<Vec<String>>,
+}
+
+#[serde_as]
+#[derive(Debug, Deserialize)]
+pub struct Schedule(#[serde_as(as = "DisplayFromStr")] cron::Schedule);
+
+impl Deref for Schedule {
+    type Target = cron::Schedule;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 #[derive(Debug, Deserialize)]

@@ -1,6 +1,5 @@
 use color_eyre::eyre::{OptionExt, Result};
 use poise::{
-    command,
     serenity_prelude::{ChannelId, User},
     CreateReply,
 };
@@ -8,11 +7,13 @@ use serde::Serialize;
 
 use crate::Context;
 
-#[command(slash_command)]
-pub async fn create(ctx: Context<'_>) -> Result<()> {
-    let user = ctx.author();
+super::command! {
+    false;
+    pub async fn create(ctx: Context<'_>) -> Result<()> {
+        let user = ctx.author();
 
-    create_channel_for(&ctx, user).await
+        create_channel_for(&ctx, user).await
+    }
 }
 
 #[derive(Serialize)]

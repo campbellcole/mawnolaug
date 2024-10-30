@@ -10,6 +10,7 @@ use poise::{
     serenity_prelude::{prelude::TypeMapKey, ClientBuilder, GatewayIntents},
     Framework, FrameworkOptions,
 };
+use random_draw::random_draw_task;
 use tokio::sync::Mutex;
 use tracing_subscriber::prelude::*;
 
@@ -20,6 +21,7 @@ pub mod command;
 pub mod config;
 pub mod handler;
 pub mod index;
+pub mod random_draw;
 pub mod state;
 pub mod utils;
 
@@ -111,18 +113,22 @@ async fn main() -> Result<()> {
     debug!(?intents, "Starting bot");
     let framework = Framework::builder()
         .options(FrameworkOptions {
-            commands: command::commands(),
+            commands: command::commands(&data.config),
             initialize_owners: false,
             skip_checks_for_owners: true,
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {
             Box::pin(async move {
+                trace!("registering commands");
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
 
                 let channels = data.state.lock().await.get_channels();
 
+                trace!("running startup index");
                 data.index.lock().await.index(ctx, channels).await?;
+
+                tokio::task::spawn(random_draw_task(data.clone(), ctx.http.clone()));
 
                 Ok(data)
             })

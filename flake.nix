@@ -20,6 +20,7 @@
           nativeBuildInputs = [
             pkg-config
             clang
+            cargo-expand
           ];
 
           buildInputs = [

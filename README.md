@@ -27,8 +27,8 @@ This file is expected at `mawnolaug.toml` in the working directory unless a loca
 
 ```toml
 token = "your discord token"
-# see "Admin commands" for an explanation. defaults to "0"
-admin_permissions = "0"
+# see "Admin commands" for an explanation. defaults to "8"
+admin_permissions = "8"
 # the location of the bot state
 state_dir = "/path/to/state_directory"
 
@@ -36,8 +36,20 @@ state_dir = "/path/to/state_directory"
 [random_draw]
 # this is the Channel that random monologues will be posted to
 channel_id = 1234567890123456
-# this the interval at which the random monologues will be posted (in minutes)
-interval = 720 # 12 hours
+# a cron expression representing a schedule for random draws
+# see https://crontab.guru/ for help with these expressions
+# note: the schedule parser requires 6 or 7 segments while crontab only shows 5:
+# sec min hour day_of_month month day_of_week year (year optional)
+schedule = "0 0 10,16,22 * * * *" # do random draws at 10am, 4pm, and 10pm local time
+# the timezone to use as local time instead of the one defined by the OS (optional)
+# this is useful if the bot is running in a docker container or distant server
+timezone = "America/Los_Angeles"
+# a set of messages to prefix the random draw with. a random message will be chosen
+# each time a new random draw occurs
+messages = [
+  "Look what I found:",
+  "Today's tea:",
+]
 
 [monologues]
 # the Category within which monologue Channels will be created (optional)

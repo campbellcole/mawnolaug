@@ -1,7 +1,19 @@
-use color_eyre::eyre::Result;
-use poise::{command, serenity_prelude::User, CreateReply};
+use std::sync::Arc;
 
-use crate::{utils, Context};
+use color_eyre::eyre::{Report, Result};
+use poise::{command, serenity_prelude::User, Command, CreateReply};
+
+use crate::{config::AppConfig, utils, Context, Data};
+
+// the `command!` macro somehow alters the `Option<User>` in a way that breaks the `poise::command`
+// macro. Instead of recognizing the argument is optional, it assumes `Option<User>` is a distinct
+// type and tries to serialize the entire type instead of extracting the `User` type and setting the
+// argument to be `required: false`
+//
+// see https://github.com/serenity-rs/poise/issues/317
+pub fn command(_config: &AppConfig) -> Command<Arc<Data>, Report> {
+    random()
+}
 
 #[command(slash_command)]
 pub async fn random(ctx: Context<'_>, user: Option<User>) -> Result<()> {
@@ -42,10 +54,8 @@ pub async fn random(ctx: Context<'_>, user: Option<User>) -> Result<()> {
         ctx.http().get_message(channel_id, message_id).await?
     };
 
-    ctx.send(
-        CreateReply::default().content(utils::repost_message(message, "Random message:").await?),
-    )
-    .await?;
+    ctx.send(CreateReply::default().content(utils::format_repost_content(message, None::<&str>)))
+        .await?;
 
     Ok(())
 }

@@ -1,7 +1,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use chrono::{DateTime, Utc};
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{Context, Result};
 use poise::serenity_prelude::{ChannelId, UserId};
 use serde::{Deserialize, Serialize};
 
@@ -22,6 +22,7 @@ impl State {
         let state_file = config.state_dir.join("state.json");
 
         if !state_file.exists() {
+            trace!("creating a new state file at {:?}", state_file);
             return Ok(Self {
                 state_file,
                 channels: HashMap::new(),
@@ -29,9 +30,12 @@ impl State {
             });
         }
 
-        let state = tokio::fs::read_to_string(&state_file).await?;
+        let state = tokio::fs::read_to_string(&state_file)
+            .await
+            .wrap_err("failed to read state file")?;
 
-        let mut state = serde_json::from_str::<Self>(&state)?;
+        let mut state =
+            serde_json::from_str::<Self>(&state).wrap_err("failed to parse state file")?;
 
         state.state_file = state_file;
 
@@ -39,9 +43,11 @@ impl State {
     }
 
     pub async fn save(&self) -> Result<()> {
-        let state_json = serde_json::to_string(self)?;
+        let state_json = serde_json::to_string(self).wrap_err("failed to serialize state")?;
 
-        tokio::fs::write(&self.state_file, state_json).await?;
+        tokio::fs::write(&self.state_file, state_json)
+            .await
+            .wrap_err("failed to write serialized state")?;
 
         Ok(())
     }
