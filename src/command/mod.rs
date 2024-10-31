@@ -13,12 +13,14 @@ macro_rules! commands {
         #[cfg(debug_assertions)]
         pub mod registration_helper;
 
+        #[cfg(debug_assertions)]
         pub fn commands(config: &AppConfig) -> Vec<Command<Arc<crate::Data>, Report>> {
-            if cfg!(debug_assertions) {
-                vec![$( $name::command(config) ),*, registration_helper::command(config)]
-            } else {
-                vec![$( $name::command(config) ),*]
-            }
+            vec![$( $name::command(config) ),*, registration_helper::command(config)]
+        }
+
+        #[cfg(not(debug_assertions))]
+        pub fn commands(config: &AppConfig) -> Vec<Command<Arc<crate::Data>, Report>> {
+            vec![$( $name::command(config) ),*]
         }
     };
 }

@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc};
+use std::sync::Arc;
 
 use chrono::{Duration, Utc};
 use color_eyre::eyre::{Context, Result};
@@ -15,29 +15,7 @@ pub async fn random_draw_task(data: Arc<Data>, http: Arc<Http>) {
 
     debug!("starting random draw task");
 
-    let tz = match random_draw.timezone {
-        Some(ref tz) => *tz,
-        None => {
-            let iana = match iana_time_zone::get_timezone() {
-                Ok(i) => i,
-                Err(err) => {
-                    error!("please set the timezone in the config file. failed to read system timezone: {}", err);
-                    return;
-                }
-            };
-
-            match chrono_tz::Tz::from_str(&iana) {
-                Ok(tz) => tz,
-                Err(err) => {
-                    error!(
-                        "please set the timezone in the config file. failed to parse timezone: {}",
-                        err
-                    );
-                    return;
-                }
-            }
-        }
-    };
+    let tz = *data.config.timezone;
 
     let now = || Utc::now().with_timezone(&tz);
     let next = || {
@@ -96,7 +74,7 @@ pub async fn do_random_draw(
         .channel_id
         .send_message(
             http,
-            CreateMessage::new().content(utils::format_repost_content(msg, prefix)),
+            CreateMessage::new().content(utils::format_repost_content(&data.config, msg, prefix)),
         )
         .await
         .wrap_err("failed to send random draw message")?;

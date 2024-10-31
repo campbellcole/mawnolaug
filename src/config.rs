@@ -1,6 +1,7 @@
-use std::{ops::Deref, path::PathBuf};
+use std::{ops::Deref, path::PathBuf, str::FromStr};
 
-use color_eyre::eyre::Result;
+use chrono_tz::Tz;
+use color_eyre::eyre::{Context, Result};
 use figment::{
     providers::{Env, Format, Toml},
     Figment,
@@ -43,6 +44,39 @@ pub struct AppConfig {
     pub random_draw: Option<RandomDrawConfig>,
     /// Configuration for monologue channels
     pub monologues: MonologuesConfig,
+    /// The timezone to use when formatting timestamps and for the random draw (if enabled)
+    #[serde(default)]
+    pub timezone: Timezone,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(transparent)]
+pub struct Timezone(chrono_tz::Tz);
+
+impl Default for Timezone {
+    fn default() -> Self {
+        match try_read_timezone() {
+            Ok(tz) => Timezone(tz),
+            Err(err) => {
+                error!("failed to read timezone, falling back to UTC: {}", err);
+                Timezone(chrono_tz::UTC)
+            }
+        }
+    }
+}
+
+fn try_read_timezone() -> Result<Tz> {
+    let iana = iana_time_zone::get_timezone().wrap_err("failed to get OS timezone")?;
+
+    Tz::from_str(&iana).wrap_err("invalid timezone specified")
+}
+
+impl Deref for Timezone {
+    type Target = chrono_tz::Tz;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -51,9 +85,6 @@ pub struct RandomDrawConfig {
     pub channel_id: ChannelId,
     /// A cron schedule for when to trigger the random draws
     pub schedule: Schedule,
-    /// The timezone to use for the cron schedule
-    #[serde(default)]
-    pub timezone: Option<chrono_tz::Tz>,
     /// A list of messages to prefix each random draw with
     #[serde(default)]
     pub messages: Option<Vec<String>>,

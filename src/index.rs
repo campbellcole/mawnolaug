@@ -80,7 +80,9 @@ impl Index {
             )
     }
 
-    // Precondition: All messages must be from the same channel.
+    /// Precondition: All messages must be from the same channel.
+    ///
+    /// Caller is responsible for ensuring `last_indexed` is updated correctly.
     fn extend_messages(&mut self, channel_id: ChannelId, messages: impl Iterator<Item = Message>) {
         self.messages
             .entry(channel_id)
@@ -97,6 +99,8 @@ impl Index {
             .entry(message.channel_id)
             .or_default()
             .push(message.id);
+
+        self.just_indexed_inner(message.channel_id, message.id);
 
         self.save().await?;
 
@@ -163,6 +167,20 @@ impl Index {
     ) -> Result<()> {
         if let Some(messages) = self.messages.get_mut(&channel_id) {
             messages.retain(|&id| id != message_id);
+
+            if self.last_indexed(&channel_id) == Some(message_id) {
+                // SAFETY: we know this must exist, we just can't use the `messages` borrow because
+                // we need an immutable borrow for `last_indexed`
+                match self.messages.get_mut(&channel_id).unwrap().last().copied() {
+                    Some(msg) => {
+                        self.just_indexed_inner(channel_id, msg);
+                    }
+                    None => {
+                        self.last_indexed.remove(&channel_id);
+                    }
+                }
+            }
+
             self.save().await?;
         }
 
@@ -171,7 +189,10 @@ impl Index {
 
     pub async fn remove_channel(&mut self, channel_id: ChannelId) -> Result<()> {
         self.messages.remove(&channel_id);
+        self.last_indexed.remove(&channel_id);
+
         self.save().await?;
+
         Ok(())
     }
 

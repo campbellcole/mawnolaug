@@ -11,6 +11,7 @@ cron = "0.12.1"
 dotenvy = "0.15.7"
 figment = { version = "0.10.19", features = ["toml", "env"] }
 iana-time-zone = "0.1.61"
+lazy-regex = { version = "3.3.0", features = ["std"] }
 poise = "0.6.1"
 rand = "0.8.5"
 serde = { version = "1.0.214", features = ["derive"] }

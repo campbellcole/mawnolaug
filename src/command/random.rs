@@ -62,8 +62,12 @@ pub async fn random(ctx: Context<'_>, user: Option<User>) -> Result<()> {
         ctx.http().get_message(channel_id, message_id).await?
     };
 
-    ctx.send(CreateReply::default().content(utils::format_repost_content(message, None::<&str>)))
-        .await?;
+    ctx.send(CreateReply::default().content(utils::format_repost_content(
+        &ctx.data().config,
+        message,
+        None::<&str>,
+    )))
+    .await?;
 
     Ok(())
 }
