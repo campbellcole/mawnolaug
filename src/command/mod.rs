@@ -38,7 +38,11 @@ macro_rules! command {
     (
         $is_admin:literal;
         $(#[$attr:meta])*
-        pub async fn $name:ident($($arg:ident: $arg_ty:ty),*) -> Result<$ret_ty:ty> $body:block
+        pub async fn $name:ident(
+            $(
+                $(#[$arg_attr:meta])*
+                $arg:ident: $arg_ty:ty
+            ),* $(,)?) -> Result<$ret_ty:ty> $body:block
     ) => {
         pub fn command(config: & $crate::config::AppConfig) -> ::poise::Command<::std::sync::Arc<$crate::Data>, ::color_eyre::eyre::Report> {
             let mut cmd = $name();
@@ -51,8 +55,11 @@ macro_rules! command {
         }
 
         $(#[$attr])*
-        #[::poise::command(slash_command)]
-        async fn $name($($arg: $arg_ty),*) -> ::color_eyre::eyre::Result<$ret_ty> $body
+        #[::poise::command(slash_command, guild_only)]
+        async fn $name($(
+            $(#[$arg_attr])*
+            $arg: $arg_ty,
+        )*) -> ::color_eyre::eyre::Result<$ret_ty> $body
     };
 }
 
