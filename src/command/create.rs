@@ -71,6 +71,14 @@ pub async fn create_channel_for(ctx: &Context<'_>, user: &User) -> Result<()> {
         };
 
         channel.create_permission(ctx.http(), permission).await?;
+
+        let permission = PermissionOverwrite {
+            allow: Permissions::SEND_MESSAGES,
+            deny: Permissions::empty(),
+            kind: PermissionOverwriteType::Member(user.id),
+        };
+
+        channel.create_permission(ctx.http(), permission).await?;
     }
 
     state.set_channel(user.id, channel.id).await?;
