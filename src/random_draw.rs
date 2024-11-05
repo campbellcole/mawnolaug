@@ -54,8 +54,13 @@ pub async fn do_random_draw(
 
     let last_run = data.state.lock().await.last_trigger();
     let index = data.index.lock().await;
-    let Some((channel_id, message_id)) = last_run.and_then(|last| index.random_message_since(last))
-    else {
+
+    let message = match last_run {
+        Some(last_run) => index.random_message_since(last_run),
+        None => index.random_message(),
+    };
+
+    let Some((channel_id, message_id)) = message else {
         warn!("no messages found for random draw");
         return Ok(());
     };
