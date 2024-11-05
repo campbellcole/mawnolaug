@@ -40,11 +40,7 @@ fn format_prefix(config: &AppConfig, mut prefix: String, message: &Message) -> S
     prefix
 }
 
-pub fn format_repost_content(
-    config: &AppConfig,
-    message: Message,
-    prefix: Option<impl ToString>,
-) -> String {
+pub fn format_repost_content(config: &AppConfig, message: Message, prefix: Option<&str>) -> String {
     let prefix = prefix
         .map(|p| format_prefix(config, p.to_string(), &message))
         .unwrap_or_default();

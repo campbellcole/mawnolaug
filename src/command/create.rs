@@ -1,6 +1,8 @@
 use color_eyre::eyre::{OptionExt, Result};
 use poise::{
-    serenity_prelude::{ChannelId, User},
+    serenity_prelude::{
+        ChannelId, PermissionOverwrite, PermissionOverwriteType, Permissions, User,
+    },
     CreateReply,
 };
 use serde::Serialize;
@@ -58,6 +60,18 @@ pub async fn create_channel_for(ctx: &Context<'_>, user: &User) -> Result<()> {
             )),
         )
         .await?;
+
+    if !ctx.data().config.monologues.allow_anyone {
+        let everyone = guild_id.everyone_role();
+
+        let permission = PermissionOverwrite {
+            allow: Permissions::empty(),
+            deny: Permissions::SEND_MESSAGES,
+            kind: PermissionOverwriteType::Role(everyone),
+        };
+
+        channel.create_permission(ctx.http(), permission).await?;
+    }
 
     state.set_channel(user.id, channel.id).await?;
 

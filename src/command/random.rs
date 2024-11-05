@@ -16,9 +16,14 @@ pub fn command(_config: &AppConfig) -> Command<Arc<Data>, Report> {
 }
 
 /// Get a random message from a random channel or a specific user's channel
-#[command(slash_command)]
-pub async fn random(ctx: Context<'_>, user: Option<User>) -> Result<()> {
-    let message = if let Some(user) = user {
+#[command(slash_command, guild_only)]
+pub async fn random(
+    ctx: Context<'_>,
+    #[description = "The user whose monologue channel the message will be drawn from"] user: Option<
+        User,
+    >,
+) -> Result<()> {
+    let (channel_id, message_id) = if let Some(user) = user {
         let Some(user_channel) = ctx.data().state.lock().await.get_channel(user.id) else {
             ctx.send(
                 CreateReply::default()
@@ -47,7 +52,7 @@ pub async fn random(ctx: Context<'_>, user: Option<User>) -> Result<()> {
             return Ok(());
         };
 
-        ctx.http().get_message(user_channel, random).await?
+        (user_channel, random)
     } else {
         let Some((channel_id, message_id)) = ctx.data().index.lock().await.random_message() else {
             ctx.send(
@@ -59,13 +64,15 @@ pub async fn random(ctx: Context<'_>, user: Option<User>) -> Result<()> {
             return Ok(());
         };
 
-        ctx.http().get_message(channel_id, message_id).await?
+        (channel_id, message_id)
     };
+
+    let message = channel_id.message(ctx, message_id).await?;
 
     ctx.send(CreateReply::default().content(utils::format_repost_content(
         &ctx.data().config,
         message,
-        None::<&str>,
+        None,
     )))
     .await?;
 

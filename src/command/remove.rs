@@ -43,10 +43,10 @@ pub async fn remove_channel_for(ctx: &Context<'_>, user: &User) -> Result<()> {
         .await?;
 
     ctx.data()
-        .state
+        .index
         .lock()
         .await
-        .remove_channel_for(&user.id)
+        .remove_channel(channel_id)
         .await?;
 
     ctx.send(

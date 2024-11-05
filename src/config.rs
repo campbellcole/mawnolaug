@@ -107,6 +107,9 @@ pub struct MonologuesConfig {
     /// The category ID for the monologue channels
     #[serde(default)]
     pub category_id: Option<ChannelId>,
+    /// Whether or not to skip setting up permissions for the monologue channels
+    #[serde(default)]
+    pub allow_anyone: bool,
 }
 
 impl AppConfig {

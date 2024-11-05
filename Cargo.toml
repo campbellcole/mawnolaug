@@ -1,6 +1,6 @@
 [package]
 name = "mawnolaug"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 
 [dependencies]
@@ -18,7 +18,12 @@ serde = { version = "1.0.214", features = ["derive"] }
 serde_json = "1.0.132"
 serde_with = "3.11.0"
 slug = "0.1.6"
-tokio = { version = "1.41.0", features = ["rt-multi-thread", "net", "fs", "macros"] }
+tokio = { version = "1.41.0", features = [
+    "rt-multi-thread",
+    "net",
+    "fs",
+    "macros",
+] }
 tracing = "0.1.40"
 tracing-error = "0.2.0"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }

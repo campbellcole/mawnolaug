@@ -38,6 +38,13 @@ state_dir = "/path/to/state_directory"
 # this is used for the `{timestamp}` specifier and the random draw schedule
 timezone = "America/Los_Angeles"
 
+[monologues]
+# the Category within which monologue Channels will be created (optional)
+# setting this is highly recommended to avoid littering your server
+category_id = 1234567890123456
+# set to true to allow anyone to post in any monologue channel (false by default)
+allow_anyone = false
+
 # this section is optional. if not defined, random draws will be disabled.
 [random_draw]
 # this is the Channel that random monologues will be posted to
@@ -54,11 +61,6 @@ messages = [
   "Look what {author} found:",
   "At {timestamp:%I:%M %p}, {author} said:",
 ]
-
-[monologues]
-# the Category within which monologue Channels will be created (optional)
-# setting this is highly recommended to avoid littering your server
-category_id = 1234567890123456
 ```
 
 The following environment variables are equivalent to the above config:

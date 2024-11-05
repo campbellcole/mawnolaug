@@ -7,7 +7,11 @@ super::command! {
     /// Remove the monologue channel for the provided user if one exists
     ///
     /// **Admin only**
-    pub async fn remove_for(ctx: Context<'_>, user: User) -> Result<()> {
+    pub async fn remove_for(
+        ctx: Context<'_>,
+        #[description = "The user whose channel to remove"]
+        user: User,
+    ) -> Result<()> {
         remove_channel_for(&ctx, &user).await
     }
 }

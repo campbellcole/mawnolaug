@@ -8,7 +8,7 @@ use color_eyre::eyre::{Report, Result};
 use handler::Handler;
 use poise::{
     serenity_prelude::{prelude::TypeMapKey, ClientBuilder, GatewayIntents},
-    Framework, FrameworkOptions,
+    BoxFuture, CreateReply, Framework, FrameworkError, FrameworkOptions,
 };
 use random_draw::random_draw_task;
 use tokio::sync::Mutex;
@@ -65,6 +65,49 @@ pub type Context<'a> = poise::Context<'a, Arc<Data>, Report>;
 
 pub static STARTUP_TIME: OnceLock<DateTime<Utc>> = OnceLock::new();
 
+async fn handle_error_inner(err: FrameworkError<'_, Arc<Data>, Report>) -> Result<()> {
+    match err {
+        FrameworkError::Setup { error, .. } => {
+            error!("setup error: {:?}", error);
+        }
+        FrameworkError::Command { error, ctx, .. } => {
+            error!("command error: {:?}", error);
+            ctx.send(
+                CreateReply::default()
+                    .content(format!("Error: {:#}", error))
+                    .ephemeral(true),
+            )
+            .await?;
+        }
+        FrameworkError::MissingBotPermissions {
+            missing_permissions,
+            ctx,
+            ..
+        } => {
+            error!("missing bot permissions: {}", missing_permissions);
+            ctx.send(
+                CreateReply::default()
+                    .content(format!("Missing bot permissions: {}", missing_permissions))
+                    .ephemeral(true),
+            )
+            .await?;
+        }
+        _ => {
+            poise::builtins::on_error(err).await?;
+        }
+    }
+
+    Ok(())
+}
+
+pub fn handle_error(err: FrameworkError<'_, Arc<Data>, Report>) -> BoxFuture<()> {
+    Box::pin(async move {
+        if let Err(err) = handle_error_inner(err).await {
+            error!("error handling error: {:?}", err);
+        }
+    })
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenvy::dotenv().ok();
@@ -116,6 +159,7 @@ async fn main() -> Result<()> {
             commands: command::commands(&data.config),
             initialize_owners: false,
             skip_checks_for_owners: true,
+            on_error: handle_error,
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {
