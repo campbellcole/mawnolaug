@@ -6,7 +6,7 @@ use figment::{
     providers::{Env, Format, Toml},
     Figment,
 };
-use poise::serenity_prelude::{ChannelId, Permissions};
+use serenity::all::{ChannelId, Permissions};
 use serde::Deserialize;
 use serde_with::{serde_as, DisplayFromStr};
 
@@ -43,6 +43,7 @@ pub struct AppConfig {
     #[serde(default)]
     pub random_draw: Option<RandomDrawConfig>,
     /// Configuration for monologue channels
+    #[serde(default)]
     pub monologues: MonologuesConfig,
 }
 
@@ -84,7 +85,7 @@ pub struct RandomDrawConfig {
     pub schedule: Schedule,
     /// A list of messages to prefix each random draw with
     #[serde(default)]
-    pub messages: Option<Vec<String>>,
+    pub messages: Vec<String>,
     /// The timezone to use when formatting timestamps and for the random draw (if enabled)
     #[serde(default)]
     pub timezone: Timezone,
@@ -102,7 +103,7 @@ impl Deref for Schedule {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 pub struct MonologuesConfig {
     /// The category ID for the monologue channels
     #[serde(default)]
@@ -110,6 +111,9 @@ pub struct MonologuesConfig {
     /// Whether or not to skip setting up permissions for the monologue channels
     #[serde(default)]
     pub allow_anyone: bool,
+    /// Whether or not to disable auto-sorting of monologue channels based on activity
+    #[serde(default)]
+    pub disable_sorting: bool,
 }
 
 impl AppConfig {
@@ -130,5 +134,9 @@ impl AppConfig {
             .extract::<AppConfig>()?;
 
         Ok(config)
+    }
+
+    pub fn is_autosort_enabled(&self) -> bool {
+        self.monologues.category_id.is_some() && !self.monologues.disable_sorting
     }
 }

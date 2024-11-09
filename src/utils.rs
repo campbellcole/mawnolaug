@@ -1,15 +1,16 @@
 use chrono::{DateTime, Utc};
 use color_eyre::eyre::{bail, Result, WrapErr};
 use lazy_regex::regex_replace_all;
-use poise::serenity_prelude::{Channel, ChannelId, Context, EditChannel, Mentionable, Message};
+use serenity::all::{Channel, ChannelId, Context, EditChannel, Mentionable, Message};
 use tokio::sync::MutexGuard;
 
-use crate::{state::State, DataHolderKey};
+use crate::data::{state::State, Data};
 
 /// Generates a Discord timestamp string from the provided timestamp and format.
 ///
-/// Discord timestamp strings are of the format `<t:TIMESTAMP:FORMAT>`, where `TIMESTAMP` is the
-/// timestamp in seconds since the Unix epoch and `FORMAT` is one of:
+/// Discord timestamp strings are of the format `<t:TIMESTAMP:FORMAT>`, where
+/// `TIMESTAMP` is the timestamp in seconds since the Unix epoch and `FORMAT` is
+/// one of:
 /// - `t`: Short time format (e.g. 16:20)
 /// - `T`: Long time format (e.g. 16:20:30)
 /// - `d`: Short date format (e.g. 20/04/2021)
@@ -21,15 +22,18 @@ fn generate_discord_timestamp(timestamp: DateTime<Utc>, format: &str) -> String 
     format!("<t:{}:{}>", timestamp.timestamp(), format)
 }
 
-/// Apply our custom formatting to the prefix. The following replacements are made:
+/// Apply our custom formatting to the prefix. The following replacements are
+/// made:
 /// - `{author}`: A mention of the message author
 /// - `{author.name}`: The name of the message author
 /// - `{author.id}`: The ID of the message author
 /// - `{channel}`: A mention of the author's monologue channel
 /// - `{channel.id}`: The ID of the author's monologue channel
-/// - `{timestamp:<format>}`: The timestamp of the message with the specified format
+/// - `{timestamp:<format>}`: The timestamp of the message with the specified
+///   format
 ///
-/// There is currently no `{channel.name}` replacement because that requires an additional API call
+/// There is currently no `{channel.name}` replacement because that requires an
+/// additional API call
 fn format_prefix(mut prefix: String, message: &Message) -> String {
     let channel_id = &message.channel_id;
     let author = &message.author;
@@ -51,6 +55,14 @@ fn format_prefix(mut prefix: String, message: &Message) -> String {
     prefix
 }
 
+/// Generate the `content` field for a repost.
+///
+/// The bulk of the contents is the `message.content` with any attachment URLs
+/// appended to the end of the message content.
+///
+/// If a prefix is provided, the entire message content is prepended with the
+/// prefix and two newlines are inserted between the prefix and the message
+/// content.
 pub fn format_repost_content(message: Message, prefix: Option<&str>) -> String {
     let prefix = prefix
         .map(|p| format_prefix(p.to_string(), &message))
@@ -77,15 +89,44 @@ pub fn format_repost_content(message: Message, prefix: Option<&str>) -> String {
     content
 }
 
+/// A wrapper around `State::next_position` that ensures the next position is
+/// valid.
+pub async fn checked_next_position(
+    cx: &Context,
+    existing: Option<u16>,
+    state: &mut MutexGuard<'_, State>,
+) -> Result<u16> {
+    let mut next_pos = state.next_position();
+    trace!("next position: {}", next_pos);
+
+    // if an existing position was provided and it is already the topmost
+    // position, we don't need to do anything
+    if existing.is_some_and(|existing| existing - 1 == next_pos) {
+        trace!("channel is already at the top");
+        return Ok(next_pos);
+    }
+
+    if next_pos == 0 {
+        trace!("next position is zero, resetting channel positions");
+        initialize_channel_positions(cx, state).await?;
+
+        next_pos = state.next_position();
+        trace!("new next position: {}", next_pos);
+    }
+
+    Ok(next_pos)
+}
+
 /// Move the provided channel to the top of its parent.
 ///
-/// This function doesn't need to know the category ID because Discord automatically manages the
-/// sort order within categories, so the positions are only relative to other channels in the
-/// category. We don't call this function unless the user has set a category in the config because
-/// it almost certainly won't work right unless every channel is contained within a category.
-pub async fn move_channel_to_top(cx: Context, channel_id: ChannelId) -> Result<()> {
+/// This function doesn't need to know the category ID because Discord
+/// automatically manages the sort order within categories, so the positions are
+/// only relative to other channels in the category. We don't call this function
+/// unless the user has set a category in the config because it almost certainly
+/// won't work right unless every channel is contained within a category.
+pub async fn move_channel_to_top(cx: &Context, data: &Data, channel_id: ChannelId) -> Result<()> {
     let Channel::Guild(mut channel) = channel_id
-        .to_channel(&cx.http)
+        .to_channel(cx)
         .await
         .wrap_err("failed to get channel")?
     else {
@@ -93,28 +134,12 @@ pub async fn move_channel_to_top(cx: Context, channel_id: ChannelId) -> Result<(
     };
     debug!("moving channel to top: {}", channel.name);
 
-    let data = cx.data.read().await;
-    let holder = data.get::<DataHolderKey>().unwrap();
-    let mut state = holder.state.lock().await;
+    let mut state = data.state.lock().await;
 
-    let mut next_pos = state.next_position();
-    trace!("next position: {}", next_pos);
-
-    if next_pos == channel.position - 1 {
-        trace!("channel is already at the top");
-        return Ok(());
-    }
-
-    if next_pos == 0 {
-        trace!("next position is zero, resetting channel positions");
-        initialize_channel_positions(&cx, &mut state).await?;
-
-        next_pos = state.next_position();
-        trace!("new next position: {}", next_pos);
-    }
+    let next_pos = checked_next_position(cx, Some(channel.position), &mut state).await?;
 
     channel
-        .edit(&cx.http, EditChannel::new().position(next_pos))
+        .edit(cx, EditChannel::new().position(next_pos))
         .await?;
 
     state.set_channel_position(channel.id, next_pos).await?;
@@ -124,13 +149,13 @@ pub async fn move_channel_to_top(cx: Context, channel_id: ChannelId) -> Result<(
 
 /// Initialize the positions of all channels in the provided category.
 ///
-/// This moves all channels to `u16::MAX - N` where N is the current channel position relative to
-/// the others. This provides a clean slate for ordering the channels later on. Each time a channel
-/// is updated, we move it to the top of the category by taking the current highest position and
-/// subtracting 1.
+/// This moves all channels to `u16::MAX - N` where N is the current channel
+/// position relative to the others. This provides a clean slate for ordering
+/// the channels later on. Each time a channel is updated, we move it to the top
+/// of the category by taking the current highest position and subtracting 1.
 ///
-/// This function maintains the current order of the channels. For example, if the channels are
-/// ordered like:
+/// This function maintains the current order of the channels. For example, if
+/// the channels are ordered like:
 /// - Channel 1: 1
 /// - Channel 2: 2
 /// - Channel 3: 3
@@ -144,6 +169,10 @@ async fn initialize_channel_positions(
     state: &mut MutexGuard<'_, State>,
 ) -> Result<()> {
     let channel_ids = state.get_channels();
+    trace!(
+        "initializing channel positions for {} channels",
+        channel_ids.len()
+    );
 
     let mut channels = Vec::with_capacity(channel_ids.len());
 
@@ -163,10 +192,11 @@ async fn initialize_channel_positions(
     channels.reverse();
 
     // we could hypothetically use the
-    // https://discord.com/developers/docs/resources/guild#modify-guild-channel-positions endpoint
-    // to batch edit the channel positions, but apparently it can mess with other channels'
-    // positions if they are unspecified and fetching a full guild channel object for every channel
-    // is almost certainly more expensive than this
+    // https://discord.com/developers/docs/resources/guild#modify-guild-channel-positions
+    // endpoint to batch edit the channel positions, but apparently it can mess
+    // with other channels' positions if they are unspecified and fetching a
+    // full guild channel object for every channel is almost certainly more
+    // expensive than this
     for (position, mut channel) in channels.into_iter().enumerate() {
         let new_pos = u16::MAX - position as u16;
         trace!("setting channel {} to position {}", channel.name, new_pos);

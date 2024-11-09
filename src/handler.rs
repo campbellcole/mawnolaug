@@ -1,105 +1,125 @@
-use poise::serenity_prelude::{
-    async_trait, ChannelId, Context, EventHandler, GuildChannel, GuildId, Message, MessageId,
+use color_eyre::eyre::{Result, WrapErr};
+use poise::BoxFuture;
+use serenity::all::{ChannelId, Context, FullEvent, GuildChannel, Message, MessageId};
+
+use crate::{
+    data::{Data, FrameworkContext},
+    utils, STARTUP_TIME,
 };
 
-use crate::{utils, DataHolder, STARTUP_TIME};
-
-pub struct Handler;
-
-#[async_trait]
-impl EventHandler for Handler {
-    async fn message(&self, ctx: Context, msg: Message) {
-        if &*msg.timestamp < STARTUP_TIME.get().unwrap() {
-            return;
-        }
-
-        let state = DataHolder::get(&ctx).await;
-
-        if !state.state.lock().await.should_track(msg.channel_id) {
-            return;
-        }
-
-        let channel_id = msg.channel_id;
-
-        if let Err(err) = state.index.lock().await.save_message(msg).await {
-            error!("failed to save message: {:?}", err);
-        };
-
-        if let Err(err) = utils::move_channel_to_top(ctx, channel_id).await {
-            error!("failed to move channel to top: {:?}", err);
-        }
+async fn message(ctx: &Context, data: &Data, msg: &Message) -> Result<()> {
+    // ignore messages sent before the bot started up. since we always index on
+    // startup, we already know about these messages and skipping them prevents
+    // duplicates from ending up in the index
+    if &*msg.timestamp < STARTUP_TIME.get().unwrap() {
+        return Ok(());
     }
 
-    async fn message_delete(
-        &self,
-        ctx: Context,
-        channel_id: ChannelId,
-        deleted_message_id: MessageId,
-        _guild_id: Option<GuildId>,
-    ) {
-        let state = DataHolder::get(&ctx).await;
+    // should_track checks if this channel is a monologue channel and we only
+    // care about messages sent to monologue channels
+    if !data.state.lock().await.should_track(msg.channel_id) {
+        return Ok(());
+    }
 
-        if !state.state.lock().await.should_track(channel_id) {
-            return;
-        }
+    let channel_id = msg.channel_id;
 
-        if let Err(err) = state
-            .index
+    // save the message to the index. this function internally checks if the
+    // message is valid and will do nothing if it is not
+    data.index
+        .lock()
+        .await
+        .save_message(msg)
+        .await
+        .wrap_err("failed to save message")?;
+
+    // if autosort is enabled, trigger the channel sorting mechanism
+    if data.config.is_autosort_enabled() {
+        utils::move_channel_to_top(ctx, data, channel_id)
+            .await
+            .wrap_err("failed to move channel to top")?;
+    }
+
+    Ok(())
+}
+
+async fn delete_messages_inner(
+    data: &Data,
+    channel_id: &ChannelId,
+    deleted_message_ids: impl IntoIterator<Item = &MessageId>,
+) -> Result<()> {
+    // same concept as above just with a bulk delete
+
+    // we only care about monologue channels
+    if !data.state.lock().await.should_track(*channel_id) {
+        return Ok(());
+    }
+
+    for deleted_message_id in deleted_message_ids {
+        // remove the message from the index. if we don't do this, there's a
+        // chance it'll be randomly drawn and produce an error
+        data.index
             .lock()
             .await
-            .remove_message(channel_id, deleted_message_id)
+            .remove_message(*channel_id, *deleted_message_id)
             .await
-        {
-            error!("failed to remove message: {:?}", err);
-        };
+            .wrap_err("failed to remove message")?;
     }
 
-    async fn message_delete_bulk(
-        &self,
-        ctx: Context,
-        channel_id: ChannelId,
-        deleted_message_ids: Vec<MessageId>,
-        _guild_id: Option<GuildId>,
-    ) {
-        let state = DataHolder::get(&ctx).await;
+    Ok(())
+}
 
-        if !state.state.lock().await.should_track(channel_id) {
-            return;
-        }
+async fn channel_delete(data: &Data, channel: &GuildChannel) -> Result<()> {
+    let mut state_lock = data.state.lock().await;
 
-        for deleted_message_id in deleted_message_ids {
-            if let Err(err) = state
-                .index
-                .lock()
-                .await
-                .remove_message(channel_id, deleted_message_id)
-                .await
-            {
-                error!("failed to remove message: {:?}", err);
-            };
-        }
+    if !state_lock.should_track(channel.id) {
+        return Ok(());
     }
 
-    async fn channel_delete(
-        &self,
-        ctx: Context,
-        channel: GuildChannel,
-        _messages: Option<Vec<Message>>,
-    ) {
-        let state = DataHolder::get(&ctx).await;
+    // we need to remove the channel from both state and index to prevent random
+    // draws and indexing from failing
+    state_lock
+        .remove_channel(channel.id)
+        .await
+        .wrap_err("failed to remove channel")?;
 
-        let mut state_lock = state.state.lock().await;
+    data.index
+        .lock()
+        .await
+        .remove_channel(channel.id)
+        .await
+        .wrap_err("failed to remove channel")?;
 
-        if !state_lock.should_track(channel.id) {
-            return;
+    Ok(())
+}
+
+pub fn event_handler<'a>(
+    ctx: &'a Context,
+    event: &'a FullEvent,
+    _framework_ctx: FrameworkContext<'a>,
+    data: &'a Data,
+) -> BoxFuture<'a, Result<()>> {
+    Box::pin(async move {
+        match event {
+            FullEvent::Message { new_message } => message(ctx, data, new_message).await?,
+            FullEvent::MessageDelete {
+                channel_id,
+                deleted_message_id,
+                guild_id: _,
+            } => {
+                delete_messages_inner(data, channel_id, std::iter::once(deleted_message_id)).await?
+            }
+            FullEvent::MessageDeleteBulk {
+                channel_id,
+                multiple_deleted_messages_ids,
+                guild_id: _,
+            } => delete_messages_inner(data, channel_id, multiple_deleted_messages_ids).await?,
+            FullEvent::ChannelDelete {
+                channel,
+                messages: _,
+            } => channel_delete(data, channel).await?,
+            _ => {}
         }
 
-        if let Err(err) = state_lock.remove_channel(channel.id).await {
-            error!("failed to remove channel: {:?}", err);
-        }
-
-        if let Err(err) = state.index.lock().await.remove_channel(channel.id).await {
-            error!("failed to remove channel: {:?}", err);
-        };
-    }
+        Ok(())
+    })
 }

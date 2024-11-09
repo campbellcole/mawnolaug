@@ -4,7 +4,7 @@
 
 A Discord bot that creates, manages, and assorts monologue channels. The intention is to give guild users a place to rant, post cool things, or just announce their accomplishments.
 
-The bot can be configured to take a random monologue entry and post it to a chosen channel however often you like.
+The bot can be configured to take a random monologue entry and post it to a chosen channel however often you like. It can also sort the channels based on recent activity.
 
 ## Usage
 
@@ -28,36 +28,63 @@ This file is expected at `mawnolaug.toml` in the working directory unless a loca
 ### Available options
 
 ```toml
+# (required)
 token = "your discord token"
-# see "Admin Commands" for an explanation. defaults to "8"
+
+# (optional, default = "8")
+# see "Admin Commands" for an explanation
 admin_permissions = "8"
+
+# (required)
 # the location of the bot state
 state_dir = "/path/to/state_directory"
 
+
+# this section is optional, though setting `category_id` is highly recommended.
 [monologues]
-# the Category within which monologue Channels will be created (optional)
-# setting this is highly recommended to avoid littering your server
+# (optional, no default)
+# the Category within which monologue Channels will be created. setting this is 
+# highly recommended to avoid littering your server
 category_id = 1234567890123456
-# set to true to allow anyone to post in any monologue channel (false by default)
+
+# (optional, default = false)
+# set to true to allow anyone to post in any monologue channel. only applies to 
+# channels created after the setting is changed.
 allow_anyone = false
 
+# (optional, default = false)
+# disable automatic sorting of monologue channels based on activity. requires 
+# `category_id`. see the "Automatic Sorting" section for information
+disable_sorting = false
+
+
 # this section is optional. if not defined, random draws will be disabled.
+# any fields within marked "(required)" are only required if this section is specified.
 [random_draw]
+
+# (required)
 # this is the Channel that random monologues will be posted to
 channel_id = 1234567890123456
-# a cron expression representing a schedule for random draws. see 
-# https://crontab.guru/ for help with these expressions.
-# note: the schedule parser requires 6 or 7 segments while crontab.guru only shows 5.
+
+# (required)
+# a cron expression representing a schedule for random draws. see
+# https://crontab.guru/ for help with these expressions (note: the schedule
+# parser requires 6 or 7 segments while crontab.guru only shows 5).
 # format:
-# sec min hour day_of_month month day_of_week year (year optional)
+# <sec> <min> <hour> <day_of_month> <month> <day_of_week> [year]
 schedule = "0 0 10,16,22 * * * *" # do random draws at 10am, 4pm, and 10pm local time
-# the timezone to use as local time instead of the OS defined timezone (optional).
+
+# (optional, default = OS timezone)
+# the timezone to use as local time instead of the OS defined timezone.
 # this is useful if the bot is running in a docker container or distant server.
 # this is used for the random draw schedule
 timezone = "America/Los_Angeles"
+
+# (optional, no default)
 # a set of messages to prefix the random draw with. a random message will be chosen
 # each time a new random draw occurs. see the "Message Templates" section for
-# information on the template syntax
+# information on the template syntax. an empty string is valid and, when randomly chosen,
+# will produce the same output as omitting this field entirely.
 messages = [
   "Look what {author} found:",
   "At {timestamp:t}, {author} said:",
@@ -70,13 +97,14 @@ The following environment variables are equivalent to the above config:
 MAWNO_TOKEN="your discord token"
 MAWNO_ADMIN_PERMISSIONS="8"
 MAWNO_STATE_DIR="/path/to/state_directory"
-MAWNO_TIMEZONE="America/Los_Angeles"
 
 MAWNO_MONOLOGUES_CATEGORY_ID="1234567890123456"
 MAWNO_MONOLOGUES_ALLOW_ANYONE="false"
+MAWNO_MONOLOGUES_DISABLE_SORTING="false"
 
 MAWNO_RANDOM_DRAW_CHANNEL_ID="1234567890123456"
 MAWNO_RANDOM_DRAW_SCHEDULE="0 0 10,16,22 * * * *"
+MAWNO_RANDOM_DRAW_TIMEZONE="America/Los_Angeles"
 MAWNO_RANDOM_DRAW_MESSAGES="['Look what {author} found:', 'At {timestamp:t}, {author} said:']"
 ```
 
@@ -104,13 +132,19 @@ admin_permissions = "32" # require the Manage Guild permission
 
 ### Message Templates
 
-The `messages` array in the config supports a few simple templates:
+The `random_draw.messages` array in the config supports a few simple templates:
 
 - `{author}`: @mention the message author
 - `{author.name}`: The author's display name
 - `{author.id}`: The user ID of the author
 - `{channel}`: #mention the author's monologue channel
 - `{channel.id}`: The channel ID of the author's monologue channel
-- `{timestamp:<timestamp style>}`: The timestamp of the message with the specified format. See [Discord Timestamp Styles](https://discord.com/developers/docs/reference#message-formatting-timestamp-styles) for a list of valid styles. Note that in this template, unlike Discord, the timestamp style is **not optional** and it will not work without specifying a valid style
+- `{timestamp:<style>}`: The timestamp of the message with the specified style. See [Discord Timestamp Styles](https://discord.com/developers/docs/reference#message-formatting-timestamp-styles) for a list of valid styles. Note that in this template, unlike Discord, the timestamp style is **not optional** and it will not work without specifying a valid style
 
 There is currently no `{channel.name}` because that would require an additional API call.
+
+### Automatic Sorting
+
+If the `monologues.category_id` setting is specified and the `monologues.disable_sorting` option is unspecified or `false`, mawnolaug will automatically sort monologue channels based on activity. When someone sends a message into their monologue channel, mawnolaug will move that channel to the top of the specified category ID.
+
+Setting `monologues.disable_sorting` to `true` will disable this.

@@ -1,6 +1,6 @@
 use poise::CreateReply;
 
-use crate::{random_draw::do_random_draw, Context};
+use crate::{data::Context, random_draw::do_random_draw};
 
 super::command! {
     true;
@@ -9,6 +9,8 @@ super::command! {
     /// **Admin only**
     pub async fn trigger(ctx: Context<'_>) -> Result<()> {
         let Some(random_draw) = &ctx.data().config.random_draw else {
+            trace!("random draw is not configured");
+
             ctx.send(CreateReply::default().content("Random draw is not configured").ephemeral(true)).await?;
 
             return Ok(());

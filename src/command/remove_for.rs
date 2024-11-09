@@ -1,6 +1,6 @@
-use poise::serenity_prelude::User;
+use serenity::all::User;
 
-use crate::{command::remove::remove_channel_for, Context};
+use crate::{command::remove::remove_channel_for, data::Context};
 
 super::command! {
     true;

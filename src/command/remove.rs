@@ -1,7 +1,8 @@
 use color_eyre::eyre::Result;
-use poise::{serenity_prelude::User, CreateReply};
+use poise::CreateReply;
+use serenity::all::User;
 
-use crate::Context;
+use crate::data::Context;
 
 super::command! {
     false;
@@ -13,7 +14,10 @@ super::command! {
     }
 }
 
+/// Remove the monologue channel for the provided user if one exists
 pub async fn remove_channel_for(ctx: &Context<'_>, user: &User) -> Result<()> {
+    // if the user has a channel, remove it and return it, otherwise send a
+    // reply stating that no channel exists
     let Some(channel_id) = ctx
         .data()
         .state
@@ -22,6 +26,8 @@ pub async fn remove_channel_for(ctx: &Context<'_>, user: &User) -> Result<()> {
         .remove_channel_for(&user.id)
         .await?
     else {
+        trace!("no monologue channel exists for {}", user.name);
+
         ctx.send(
             CreateReply::default()
                 .content(format!("No monologue channel exists for <@{}>", user.id))
@@ -32,6 +38,8 @@ pub async fn remove_channel_for(ctx: &Context<'_>, user: &User) -> Result<()> {
         return Ok(());
     };
 
+    trace!("deleting monologue channel for {}", user.name);
+    // delete the channel
     ctx.http()
         .delete_channel(
             channel_id,
@@ -42,6 +50,7 @@ pub async fn remove_channel_for(ctx: &Context<'_>, user: &User) -> Result<()> {
         )
         .await?;
 
+    // remove the channel from the index
     ctx.data()
         .index
         .lock()
