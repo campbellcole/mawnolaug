@@ -2,7 +2,7 @@ use poise::serenity_prelude::{
     async_trait, ChannelId, Context, EventHandler, GuildChannel, GuildId, Message, MessageId,
 };
 
-use crate::{DataHolder, STARTUP_TIME};
+use crate::{utils, DataHolder, STARTUP_TIME};
 
 pub struct Handler;
 
@@ -19,9 +19,15 @@ impl EventHandler for Handler {
             return;
         }
 
+        let channel_id = msg.channel_id;
+
         if let Err(err) = state.index.lock().await.save_message(msg).await {
             error!("failed to save message: {:?}", err);
         };
+
+        if let Err(err) = utils::move_channel_to_top(ctx, channel_id).await {
+            error!("failed to move channel to top: {:?}", err);
+        }
     }
 
     async fn message_delete(

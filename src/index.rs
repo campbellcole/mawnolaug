@@ -73,7 +73,7 @@ impl Index {
 
     pub fn is_message_valid(message: &Message) -> bool {
         !message.author.bot
-            && message.poll.is_none()
+            // && message.poll.is_none() need to wait for serenity 0.12.3 with fix for #2892
             && matches!(
                 message.kind,
                 MessageType::Regular | MessageType::InlineReply

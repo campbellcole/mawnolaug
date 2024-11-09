@@ -39,7 +39,7 @@ pub async fn random_draw_task(data: Arc<Data>, http: Arc<Http>) {
         tokio::time::sleep(duration_std).await;
 
         if let Err(err) = do_random_draw(random_draw, &data, &http).await {
-            error!("failed to run random draw: {}", err);
+            error!("failed to run random draw: {:?}", err);
         }
     }
 }

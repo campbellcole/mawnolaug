@@ -13,6 +13,7 @@ figment = { version = "0.10.19", features = ["toml", "env"] }
 iana-time-zone = "0.1.61"
 lazy-regex = { version = "3.3.0", features = ["std"] }
 poise = "0.6.1"
+serenity = { version = "=0.12.1", default-features = false }
 rand = "0.8.5"
 serde = { version = "1.0.214", features = ["derive"] }
 serde_json = "1.0.132"

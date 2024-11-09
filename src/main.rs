@@ -7,7 +7,7 @@ use chrono::{DateTime, Utc};
 use color_eyre::eyre::{Report, Result};
 use handler::Handler;
 use poise::{
-    serenity_prelude::{prelude::TypeMapKey, ClientBuilder, GatewayIntents},
+    serenity_prelude::{prelude::TypeMapKey, ActivityData, ClientBuilder, GatewayIntents},
     BoxFuture, CreateReply, Framework, FrameworkError, FrameworkOptions,
 };
 use random_draw::random_draw_task;
@@ -173,6 +173,8 @@ async fn main() -> Result<()> {
                 data.index.lock().await.index(ctx, channels).await?;
 
                 tokio::task::spawn(random_draw_task(data.clone(), ctx.http.clone()));
+
+                ctx.set_activity(Some(ActivityData::watching("you shitpost")));
 
                 Ok(data)
             })

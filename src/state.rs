@@ -15,6 +15,12 @@ pub struct State {
     channels: HashMap<UserId, ChannelId>,
     /// Last trigger time for random draw
     last_trigger: Option<DateTime<Utc>>,
+    /// A cache of the order of channels in the monologue category
+    ///
+    /// This is used to prevent fetching every channel in the category just to get their positions.
+    /// The positions are used to order the channels based on which has been used most recently.
+    #[serde(default)]
+    channel_positions: HashMap<ChannelId, u16>,
 }
 
 impl State {
@@ -27,6 +33,7 @@ impl State {
                 state_file,
                 channels: HashMap::new(),
                 last_trigger: None,
+                channel_positions: HashMap::new(),
             });
         }
 
@@ -110,5 +117,35 @@ impl State {
         self.save().await?;
 
         Ok(())
+    }
+
+    pub fn channel_position(&self, channel_id: ChannelId) -> Option<u16> {
+        self.channel_positions.get(&channel_id).copied()
+    }
+
+    pub async fn set_channel_position(
+        &mut self,
+        channel_id: ChannelId,
+        position: u16,
+    ) -> Result<()> {
+        self.channel_positions.insert(channel_id, position);
+
+        self.save().await?;
+
+        Ok(())
+    }
+
+    /// Get the next position to use for a channel. The order of channels is descending, so the next
+    /// position will be the lowest number in the map minus 1. If this returns zero, it is time to
+    /// move all the channels back to u16::MAX and start over.
+    pub fn next_position(&self) -> u16 {
+        // we use unwrap or default so if there are no entries, we return zero which will trigger
+        // the reset
+        self.channel_positions
+            .values()
+            .copied()
+            .min()
+            .map(|pos| pos - 1)
+            .unwrap_or_default()
     }
 }
