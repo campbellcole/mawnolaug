@@ -1,9 +1,25 @@
+use chrono::{DateTime, Utc};
 use color_eyre::eyre::{bail, Result, WrapErr};
 use lazy_regex::regex_replace_all;
 use poise::serenity_prelude::{Channel, ChannelId, Context, EditChannel, Mentionable, Message};
 use tokio::sync::MutexGuard;
 
-use crate::{config::AppConfig, state::State, DataHolderKey};
+use crate::{state::State, DataHolderKey};
+
+/// Generates a Discord timestamp string from the provided timestamp and format.
+///
+/// Discord timestamp strings are of the format `<t:TIMESTAMP:FORMAT>`, where `TIMESTAMP` is the
+/// timestamp in seconds since the Unix epoch and `FORMAT` is one of:
+/// - `t`: Short time format (e.g. 16:20)
+/// - `T`: Long time format (e.g. 16:20:30)
+/// - `d`: Short date format (e.g. 20/04/2021)
+/// - `D`: Long date format (e.g. 20 April 2021)
+/// - `f`: Short date and time format (e.g. 20 April 2021 16:20)
+/// - `F`: Long date and time format (e.g. Tuesday, 20 April 2021 16:20)
+/// - `R`: Relative time format (e.g. 2 months ago)
+fn generate_discord_timestamp(timestamp: DateTime<Utc>, format: &str) -> String {
+    format!("<t:{}:{}>", timestamp.timestamp(), format)
+}
 
 /// Apply our custom formatting to the prefix. The following replacements are made:
 /// - `{author}`: A mention of the message author
@@ -14,7 +30,7 @@ use crate::{config::AppConfig, state::State, DataHolderKey};
 /// - `{timestamp:<format>}`: The timestamp of the message with the specified format
 ///
 /// There is currently no `{channel.name}` replacement because that requires an additional API call
-fn format_prefix(config: &AppConfig, mut prefix: String, message: &Message) -> String {
+fn format_prefix(mut prefix: String, message: &Message) -> String {
     let channel_id = &message.channel_id;
     let author = &message.author;
 
@@ -26,25 +42,18 @@ fn format_prefix(config: &AppConfig, mut prefix: String, message: &Message) -> S
         .replace("{channel.id}", &channel_id.to_string());
 
     prefix = regex_replace_all!(
-        r#"\{timestamp:(?P<format>[^}]+)\}"#,
+        r#"\{timestamp:(?P<format>[tTdDfFR])\}"#,
         &prefix,
-        |_, format| {
-            let timezone = config.timezone;
-            message
-                .timestamp
-                .with_timezone(&*timezone)
-                .format(format)
-                .to_string()
-        }
+        |_, format| { generate_discord_timestamp(*message.timestamp, format) }
     )
     .to_string();
 
     prefix
 }
 
-pub fn format_repost_content(config: &AppConfig, message: Message, prefix: Option<&str>) -> String {
+pub fn format_repost_content(message: Message, prefix: Option<&str>) -> String {
     let prefix = prefix
-        .map(|p| format_prefix(config, p.to_string(), &message))
+        .map(|p| format_prefix(p.to_string(), &message))
         .unwrap_or_default();
 
     let mut content = prefix;

@@ -14,6 +14,10 @@ super::command! {
             return Ok(());
         };
 
-        do_random_draw(random_draw, ctx.data(), ctx.http()).await
+        do_random_draw(random_draw, ctx.data(), ctx.http()).await?;
+
+        ctx.send(CreateReply::default().content("Random draw triggered").ephemeral(true)).await?;
+
+        Ok(())
     }
 }

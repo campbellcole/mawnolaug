@@ -15,7 +15,7 @@ pub async fn random_draw_task(data: Arc<Data>, http: Arc<Http>) {
 
     debug!("starting random draw task");
 
-    let tz = *data.config.timezone;
+    let tz = *random_draw.timezone;
 
     let now = || Utc::now().with_timezone(&tz);
     let next = || {
@@ -79,7 +79,7 @@ pub async fn do_random_draw(
         .channel_id
         .send_message(
             http,
-            CreateMessage::new().content(utils::format_repost_content(&data.config, msg, prefix)),
+            CreateMessage::new().content(utils::format_repost_content(msg, prefix)),
         )
         .await
         .wrap_err("failed to send random draw message")?;

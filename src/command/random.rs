@@ -69,12 +69,8 @@ pub async fn random(
 
     let message = channel_id.message(ctx, message_id).await?;
 
-    ctx.send(CreateReply::default().content(utils::format_repost_content(
-        &ctx.data().config,
-        message,
-        None,
-    )))
-    .await?;
+    ctx.send(CreateReply::default().content(utils::format_repost_content(message, None)))
+        .await?;
 
     Ok(())
 }

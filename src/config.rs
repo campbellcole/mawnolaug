@@ -44,9 +44,6 @@ pub struct AppConfig {
     pub random_draw: Option<RandomDrawConfig>,
     /// Configuration for monologue channels
     pub monologues: MonologuesConfig,
-    /// The timezone to use when formatting timestamps and for the random draw (if enabled)
-    #[serde(default)]
-    pub timezone: Timezone,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -88,6 +85,9 @@ pub struct RandomDrawConfig {
     /// A list of messages to prefix each random draw with
     #[serde(default)]
     pub messages: Option<Vec<String>>,
+    /// The timezone to use when formatting timestamps and for the random draw (if enabled)
+    #[serde(default)]
+    pub timezone: Timezone,
 }
 
 #[serde_as]
